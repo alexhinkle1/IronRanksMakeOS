@@ -1,73 +1,160 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0e14">
-<title>IronRanksMakeOS</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1117">
+  <title>Iron Ranks</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand"><span class="brand-icon">⚔️</span> Iron Ranks</div>
-  <span class="pill">MakeOS</span>
-</header>
-<main>
-  <section class="card hero">
-    <div>
-      <div class="muted small-text">Connection test</div>
-      <div class="hero-title">Action layer</div>
-      <div class="muted">Vercel UI &rarr; MakeOS &rarr; Supabase</div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">⚔️</span> Iron Ranks</div>
+    <div class="who">
+      <span id="who-name" class="who-name"></span>
+      <button id="signout" class="btn ghost small" type="button">Sign out</button>
     </div>
-    <div class="hero-stats">
-      <div class="stat"><b id="count">—</b><span>actions</span></div>
-    </div>
-  </section>
+  </header>
 
-  <section class="card">
-    <h2>Send an action</h2>
-    <p class="muted">This is sent to MakeOS, which writes it to Supabase.</p>
-    <form id="f" autocomplete="off">
-      <label>Message
-        <input id="msg" type="text" maxlength="200" placeholder="e.g. Log a squat 140kg x 3" required>
-      </label>
-      <button id="send" class="btn primary wide" type="submit">Send to MakeOS</button>
-      <p id="status" class="status"></p>
-    </form>
-    <div class="chain">
-      <span class="node"><b>1</b> Vercel form</span>
-      <span class="node"><b>2</b> MakeOS webhook</span>
-      <span class="node"><b>3</b> Supabase row</span>
-    </div>
-  </section>
+  <main id="app">
+    <div id="loading" class="center-msg"><div class="spinner"></div><p>Loading your stats…</p></div>
+    <div id="fatal" class="card error hidden"></div>
 
-  <h3 class="section-title">Recent actions</h3>
-  <section class="card"><div id="list"><p class="muted">Loading…</p></div></section>
-</main>
-<script>
-const SB='https://yqadckmauiqehwhfgmzl.supabase.co';
-const KEY='sb_publishable_RHCcXXMAO-bIxJK-raWbuA_XsO7OKYJ';
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function load(){
-  try{
-    const r=await fetch(SB+'/rest/v1/actions?select=*&order=created_at.desc&limit=10',{headers:{apikey:KEY,Authorization:'Bearer '+KEY}});
-    const rows=await r.json();
-    document.getElementById('count').textContent=rows.length;
-    document.getElementById('list').innerHTML=rows.length?rows.map(x=>'<div class="item"><div class="item-top"><span class="item-msg">'+esc((x.payload&&x.payload.message)||'')+'</span><span class="badge">'+(x.payload&&x.payload.handled_by==='makeos'?'via MakeOS':esc(x.source))+'</span></div><div class="item-sub">'+new Date(x.created_at).toLocaleString()+'</div></div>').join(''):'<p class="muted">No actions yet.</p>';
-  }catch(e){document.getElementById('list').innerHTML='<p class="muted">Could not load actions.</p>';}
-}
-document.getElementById('f').onsubmit=async e=>{
-  e.preventDefault();
-  const s=document.getElementById('status'),b=document.getElementById('send'),i=document.getElementById('msg');
-  b.disabled=true;s.className='status';s.textContent='Sending…';
-  try{
-    const r=await fetch('/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:i.value})});
-    if(r.ok){s.className='status ok';s.textContent='Sent to MakeOS ✓';i.value='';setTimeout(load,1500);}
-    else{s.className='status err';s.textContent='Failed ('+r.status+')';}
-  }catch(err){s.className='status err';s.textContent='Network error';}
-  b.disabled=false;
-};
-load();
-</script>
+    <!-- Banner while the AI is ranking a freshly logged lift -->
+    <div id="ranking-banner" class="banner hidden"><div class="spinner small"></div><span id="ranking-text">Rank Judge is ranking your lift…</span></div>
+
+    <!-- ONBOARDING / PROFILE -->
+    <section id="view-profile" class="view hidden">
+      <div class="card">
+        <h2 id="profile-title">Create your lifter profile</h2>
+        <p class="muted" id="profile-sub">Your rank depends on your sex, height and bodyweight, so the AI can judge you fairly against lifters your size.</p>
+        <form id="profile-form" autocomplete="off">
+          <label>Display name
+            <input id="p-name" type="text" maxlength="40" placeholder="Your name">
+          </label>
+          <div class="field">
+            <span class="label">Sex <small class="muted">(used for strength standards)</small></span>
+            <div class="seg" id="p-sex">
+              <button type="button" data-v="male">Male</button>
+              <button type="button" data-v="female">Female</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">Units</span>
+            <div class="seg" id="p-units">
+              <button type="button" data-v="kg">kg / cm</button>
+              <button type="button" data-v="lb">lb / in</button>
+            </div>
+          </div>
+          <div class="row">
+            <label>Height <small class="muted" id="p-height-unit">(cm)</small>
+              <input id="p-height" type="number" inputmode="decimal" step="0.1" min="30" max="260" required>
+            </label>
+            <label>Bodyweight <small class="muted" id="p-weight-unit">(kg)</small>
+              <input id="p-weight" type="number" inputmode="decimal" step="0.1" min="30" max="700" required>
+            </label>
+          </div>
+          <label>Age <small class="muted">(optional, adjusts for youth and masters lifters)</small>
+            <input id="p-age" type="number" inputmode="numeric" step="1" min="13" max="100">
+          </label>
+          <p id="profile-error" class="form-error hidden"></p>
+          <div class="actions">
+            <button id="profile-save" class="btn primary" type="submit">Save profile</button>
+            <button id="profile-cancel" class="btn ghost hidden" type="button">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="view hidden">
+      <div class="hero card">
+        <div>
+          <div class="muted small-text">Overall power level</div>
+          <div id="hero-tier" class="hero-tier">—</div>
+          <div id="hero-sub" class="muted"></div>
+        </div>
+        <div id="hero-stats" class="hero-stats"></div>
+      </div>
+      <h3 class="section-title">Your lift ranks</h3>
+      <div id="rank-cards" class="rank-grid"></div>
+      <div id="empty-hint" class="card hidden center">
+        <p>No lifts logged yet.</p>
+        <button class="btn primary" data-go="log" type="button">Log your first lift</button>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section id="view-log" class="view hidden">
+      <div class="card">
+        <h2>Log a lift</h2>
+        <p class="muted">Enter your best set. The Rank Judge AI estimates your one-rep max and decides your tier.</p>
+        <form id="lift-form" autocomplete="off">
+          <label>Lift
+            <select id="l-lift" name="lift" required>
+              <option>Squat</option>
+              <option>Bench Press</option>
+              <option>Deadlift</option>
+              <option>Overhead Press</option>
+              <option>Barbell Row</option>
+            </select>
+          </label>
+          <div class="row">
+            <label>Weight <small class="muted" id="l-unit">(kg)</small>
+              <input id="l-weight" type="number" inputmode="decimal" step="0.5" min="1" max="1500" required>
+            </label>
+            <label>Reps
+              <input id="l-reps" name="reps" type="number" inputmode="numeric" step="1" min="1" max="30" value="1" required>
+            </label>
+          </div>
+          <input id="l-weight-kg" name="weightKg" type="number" step="any" hidden>
+          <label>Date
+            <input id="l-date" name="performedOn" type="date" required>
+          </label>
+          <p id="l-preview" class="muted small-text"></p>
+          <p id="lift-error" class="form-error hidden"></p>
+          <button id="lift-submit" class="btn primary wide" type="submit">Log &amp; rank this lift</button>
+          <p data-make-status class="muted small-text"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- PROGRESS -->
+    <section id="view-progress" class="view hidden">
+      <div class="card">
+        <h2>Progress over time</h2>
+        <div id="lift-chips" class="chips"></div>
+        <div id="chart-wrap"></div>
+        <div id="chart-stats" class="stat-row"></div>
+      </div>
+      <div class="card">
+        <h3>Tier timeline</h3>
+        <div id="tier-timeline"></div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="view hidden">
+      <div class="card">
+        <div class="row between">
+          <h2>History</h2>
+          <button id="refresh" class="btn ghost small" type="button">Refresh</button>
+        </div>
+        <div id="history-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav id="tabbar" class="tabbar hidden">
+    <button data-go="dashboard" class="tab"><span>🏆</span>Ranks</button>
+    <button data-go="log" class="tab"><span>➕</span>Log</button>
+    <button data-go="progress" class="tab"><span>📈</span>Progress</button>
+    <button data-go="history" class="tab"><span>🗒️</span>History</button>
+    <button data-go="profile" class="tab"><span>👤</span>Profile</button>
+  </nav>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="make.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
