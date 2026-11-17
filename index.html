@@ -1,29 +1,73 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>IronRanksMakeOS</title>
-<style>body{font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px}li{margin:6px 0}code{background:#eee;padding:2px 4px}</style></head>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<title>IronRanksMakeOS</title>
+<link rel="stylesheet" href="style.css">
+</head>
 <body>
-<h1>IronRanksMakeOS</h1>
-<p>UI on Vercel. Actions run in MakeOS. Data lives in Supabase.</p>
-<form id="f"><input id="msg" placeholder="Type an action" required> <button>Send to MakeOS</button></form>
-<p id="status"></p>
-<h2>Recent actions (read from Supabase)</h2>
-<ul id="list"></ul>
+<header class="topbar">
+  <div class="brand"><span class="brand-icon">⚔️</span> Iron Ranks</div>
+  <span class="pill">MakeOS</span>
+</header>
+<main>
+  <section class="card hero">
+    <div>
+      <div class="muted small-text">Connection test</div>
+      <div class="hero-title">Action layer</div>
+      <div class="muted">Vercel UI &rarr; MakeOS &rarr; Supabase</div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><b id="count">—</b><span>actions</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Send an action</h2>
+    <p class="muted">This is sent to MakeOS, which writes it to Supabase.</p>
+    <form id="f" autocomplete="off">
+      <label>Message
+        <input id="msg" type="text" maxlength="200" placeholder="e.g. Log a squat 140kg x 3" required>
+      </label>
+      <button id="send" class="btn primary wide" type="submit">Send to MakeOS</button>
+      <p id="status" class="status"></p>
+    </form>
+    <div class="chain">
+      <span class="node"><b>1</b> Vercel form</span>
+      <span class="node"><b>2</b> MakeOS webhook</span>
+      <span class="node"><b>3</b> Supabase row</span>
+    </div>
+  </section>
+
+  <h3 class="section-title">Recent actions</h3>
+  <section class="card"><div id="list"><p class="muted">Loading…</p></div></section>
+</main>
 <script>
 const SB='https://yqadckmauiqehwhfgmzl.supabase.co';
 const KEY='sb_publishable_RHCcXXMAO-bIxJK-raWbuA_XsO7OKYJ';
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function load(){
-  const r=await fetch(SB+'/rest/v1/actions?select=*&order=created_at.desc&limit=10',{headers:{apikey:KEY,Authorization:'Bearer '+KEY}});
-  const rows=await r.json();
-  document.getElementById('list').innerHTML=rows.map(x=>'<li><code>'+x.source+'</code> '+JSON.stringify(x.payload)+' <small>'+x.created_at+'</small></li>').join('');
+  try{
+    const r=await fetch(SB+'/rest/v1/actions?select=*&order=created_at.desc&limit=10',{headers:{apikey:KEY,Authorization:'Bearer '+KEY}});
+    const rows=await r.json();
+    document.getElementById('count').textContent=rows.length;
+    document.getElementById('list').innerHTML=rows.length?rows.map(x=>'<div class="item"><div class="item-top"><span class="item-msg">'+esc((x.payload&&x.payload.message)||'')+'</span><span class="badge">'+(x.payload&&x.payload.handled_by==='makeos'?'via MakeOS':esc(x.source))+'</span></div><div class="item-sub">'+new Date(x.created_at).toLocaleString()+'</div></div>').join(''):'<p class="muted">No actions yet.</p>';
+  }catch(e){document.getElementById('list').innerHTML='<p class="muted">Could not load actions.</p>';}
 }
 document.getElementById('f').onsubmit=async e=>{
   e.preventDefault();
-  const s=document.getElementById('status');
-  s.textContent='Sending...';
-  const r=await fetch('/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:document.getElementById('msg').value})});
-  s.textContent=r.ok?'Sent to MakeOS':'Failed: '+r.status;
-  setTimeout(load,2000);
+  const s=document.getElementById('status'),b=document.getElementById('send'),i=document.getElementById('msg');
+  b.disabled=true;s.className='status';s.textContent='Sending…';
+  try{
+    const r=await fetch('/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:i.value})});
+    if(r.ok){s.className='status ok';s.textContent='Sent to MakeOS ✓';i.value='';setTimeout(load,1500);}
+    else{s.className='status err';s.textContent='Failed ('+r.status+')';}
+  }catch(err){s.className='status err';s.textContent='Network error';}
+  b.disabled=false;
 };
 load();
 </script>
-</body></html>
+</body>
+</html>
