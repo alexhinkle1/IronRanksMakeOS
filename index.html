@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>IronRanksMakeOS</title>
+<style>body{font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px}li{margin:6px 0}code{background:#eee;padding:2px 4px}</style></head>
+<body>
+<h1>IronRanksMakeOS</h1>
+<p>UI on Vercel. Actions run in MakeOS. Data lives in Supabase.</p>
+<form id="f"><input id="msg" placeholder="Type an action" required> <button>Send to MakeOS</button></form>
+<p id="status"></p>
+<h2>Recent actions (read from Supabase)</h2>
+<ul id="list"></ul>
+<script>
+const SB='https://yqadckmauiqehwhfgmzl.supabase.co';
+const KEY='sb_publishable_RHCcXXMAO-bIxJK-raWbuA_XsO7OKYJ';
+async function load(){
+  const r=await fetch(SB+'/rest/v1/actions?select=*&order=created_at.desc&limit=10',{headers:{apikey:KEY,Authorization:'Bearer '+KEY}});
+  const rows=await r.json();
+  document.getElementById('list').innerHTML=rows.map(x=>'<li><code>'+x.source+'</code> '+JSON.stringify(x.payload)+' <small>'+x.created_at+'</small></li>').join('');
+}
+document.getElementById('f').onsubmit=async e=>{
+  e.preventDefault();
+  const s=document.getElementById('status');
+  s.textContent='Sending...';
+  const r=await fetch('/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:document.getElementById('msg').value})});
+  s.textContent=r.ok?'Sent to MakeOS':'Failed: '+r.status;
+  setTimeout(load,2000);
+};
+load();
+</script>
+</body></html>
